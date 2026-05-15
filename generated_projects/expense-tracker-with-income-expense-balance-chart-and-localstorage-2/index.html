@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Expense Tracker With Income Expense Balance Chart And Localstorage</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-wrap"><span class="logo">💰 Expense Tracker With Income Expense Balance Chart And Localstorage</span>
+  <select id="month-filter" style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;margin-left:auto" onchange="renderAll()">
+    <option value="all">All Time</option>
+    <option value="2025-05">May 2025</option>
+    <option value="2025-04">Apr 2025</option>
+    <option value="2025-03">Mar 2025</option>
+  </select>
+</div></nav>
+<div style="max-width:960px;margin:0 auto;padding:20px">
+  <div class="stat-grid" style="margin-bottom:24px">
+    <div class="stat-card" style="border-top:3px solid #10b981"><div class="stat-icon">📈</div><div class="stat-val" id="total-income">$0.00</div><div class="stat-lbl">Total Income</div></div>
+    <div class="stat-card" style="border-top:3px solid #ef4444"><div class="stat-icon">📉</div><div class="stat-val" id="total-expense">$0.00</div><div class="stat-lbl">Total Expenses</div></div>
+    <div class="stat-card" style="border-top:3px solid #6366f1"><div class="stat-icon">💳</div><div class="stat-val" id="balance">$0.00</div><div class="stat-lbl">Balance</div></div>
+    <div class="stat-card" style="border-top:3px solid #f59e0b"><div class="stat-icon">🧾</div><div class="stat-val" id="tx-count">0</div><div class="stat-lbl">Transactions</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:20px;margin-bottom:24px">
+    <div class="admin-card">
+      <h3 class="card-title">➕ Add Transaction</h3>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button id="type-income"  class="cat active" onclick="setType('income',this)">📈 Income</button>
+        <button id="type-expense" class="cat"        onclick="setType('expense',this)">📉 Expense</button>
+      </div>
+      <input id="tx-desc" class="nav-search" style="width:100%;margin-bottom:10px;border-radius:7px" placeholder="Description...">
+      <input id="tx-amount" type="number" min="0" step="0.01" class="nav-search" style="width:100%;margin-bottom:10px;border-radius:7px" placeholder="Amount ($)">
+      <select id="tx-cat" style="width:100%;padding:8px 12px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;margin-bottom:12px">
+        <option value="Food">🍔 Food</option><option value="Transport">🚗 Transport</option><option value="Shopping">🛍️ Shopping</option>
+        <option value="Health">💊 Health</option><option value="Entertainment">🎬 Entertainment</option><option value="Salary">💼 Salary</option>
+        <option value="Freelance">💻 Freelance</option><option value="Other">📌 Other</option>
+      </select>
+      <input id="tx-date" type="date" class="nav-search" style="width:100%;margin-bottom:12px;border-radius:7px">
+      <button class="btn" style="width:100%" onclick="addTx()">Add Transaction</button>
+    </div>
+    <div class="admin-card">
+      <h3 class="card-title">📊 Spending by Category</h3>
+      <div id="cat-chart" style="padding-top:8px"></div>
+    </div>
+  </div>
+  <div class="admin-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h3 class="card-title" style="margin:0">🧾 Transactions</h3>
+      <div style="display:flex;gap:8px">
+        <button class="cat active" id="tf-all"     onclick="setTxFilter('all',this)">All</button>
+        <button class="cat"        id="tf-income"  onclick="setTxFilter('income',this)">Income</button>
+        <button class="cat"        id="tf-expense" onclick="setTxFilter('expense',this)">Expense</button>
+      </div>
+    </div>
+    <div id="tx-list"></div>
+  </div>
+</div>
+<footer class="footer"><p>💰 Expense Tracker With Income Expense Balance Chart And Localstorage · Track Every Dollar · © 2025</p></footer>
+
+<script src="app.js"></script>
+</body>
+</html>

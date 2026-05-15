@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Medical Shop Landing Page With Medicine Search</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-wrap"><span class="logo">💊 Medical Shop Landing Page With Medicine Search</span>
+  <input id="search" class="nav-search" placeholder="Search medicines..." oninput="filterProds()">
+  <button class="cart-btn" onclick="toggleCart()">🛒 Cart <span id="cnt" class="cbadge">0</span></button>
+</div></nav>
+<div class="cats">
+  <button class="cat active" onclick="setCat('all',this)">All Products</button>
+  <button class="cat" onclick="setCat('tablets',this)">💊 Tablets</button>
+  <button class="cat" onclick="setCat('vitamins',this)">⚡ Vitamins</button>
+  <button class="cat" onclick="setCat('syrups',this)">🍯 Syrups</button>
+  <button class="cat" onclick="setCat('firstaid',this)">🩹 First Aid</button>
+</div>
+<main class="main"><div class="sec-hdr"><h2 class="sec-title">Products</h2><span id="pcnt" class="badge"></span></div>
+  <div id="grid" class="grid"></div></main>
+<section class="delivery"><h2>🚚 Delivery Options</h2>
+  <div class="row3">
+    <div class="dcard"><b>⚡ Express 2-4h</b><p>Priority delivery in city areas</p></div>
+    <div class="dcard"><b>🌡️ Cold Chain</b><p>Temperature-controlled transport</p></div>
+    <div class="dcard"><b>💳 Pay Flexibly</b><p>Online or cash on delivery</p></div>
+  </div>
+</section>
+<section class="contact-s"><h2>📞 Contact Us</h2>
+  <div class="row2">
+    <div><p>📍 123 Health Street, Medical District</p><p>📞 1800-MED-HELP (24/7)</p><p>✉️ support@medishop.com</p><p>🕐 Mon–Sun: 8 AM – 10 PM</p></div>
+    <form onsubmit="return sub(event,this)">
+      <input placeholder="Your Name" required><input type="email" placeholder="Email" required>
+      <input type="tel" placeholder="Phone Number">
+      <textarea placeholder="How can we help?" rows="4"></textarea>
+      <button type="submit">Send Message</button><p id="cmsg" class="fmsg"></p>
+    </form>
+  </div>
+</section>
+<aside id="cart" class="cart-panel">
+  <div class="cart-hdr"><b>🛒 Cart Summary</b><button onclick="toggleCart()">✕</button></div>
+  <div id="citems" class="citems"></div>
+  <div class="cart-foot">
+    <div class="total-row"><span>Subtotal</span><strong id="ctotal">$0.00</strong></div>
+    <button onclick="checkout()">Proceed to Checkout →</button>
+    <p class="free-note">🚚 Free delivery on orders above $30</p>
+  </div>
+</aside>
+<div id="ov" class="overlay" onclick="toggleCart()"></div>
+<footer class="footer"><p>💊 Medical Shop Landing Page With Medicine Search · Licensed Online Pharmacy · © 2025</p></footer>
+
+<script src="app.js"></script>
+<button id="dm-btn" title="Toggle dark mode">🌙</button>
+</body>
+</html>

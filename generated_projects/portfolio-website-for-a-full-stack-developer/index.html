@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio Website For A Full Stack Developer</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-wrap"><span class="logo">&lt;Portfolio Website For A Full Stack Developer/&gt;</span>
+  <div class="links"><a href="#skills">Skills</a><a href="#projects">Projects</a><a href="#contact">Contact</a></div>
+  <a class="btn" href="#contact">Hire Me</a>
+</div></nav>
+<section id="hero" class="hero">
+  <div class="avail">🟢 Available for work</div>
+  <h1>Hi, I'm <span class="grad">Alex Chen</span></h1>
+  <p class="role">Full Stack Developer &amp; UI/UX Enthusiast</p>
+  <p>Building fast, accessible, and beautiful web applications since 2019. Open to remote &amp; contract opportunities.</p>
+  <div class="hbtns"><a class="btn" href="#projects">View My Work</a><a class="btn ghost" href="#contact">Get In Touch</a></div>
+</section>
+<section id="skills" class="section"><h2>🛠 Tech Stack</h2>
+  <div class="tags"><span>React</span><span>TypeScript</span><span>Node.js</span><span>Python</span><span>Rust</span><span>PostgreSQL</span><span>Docker</span><span>AWS</span><span>Next.js</span><span>GraphQL</span><span>Redis</span><span>Tailwind</span></div>
+</section>
+<section id="projects" class="section"><h2>📦 Featured Projects</h2>
+  <div class="grid3">
+    <div class="card"><h3>🛒 E-Commerce Platform</h3><p>Full-stack marketplace with Stripe payments and real-time inventory management.</p><div class="tags sm"><span>React</span><span>Node.js</span><span>PostgreSQL</span></div></div>
+    <div class="card"><h3>🤖 AI Chat Assistant</h3><p>GPT-4 powered support bot with context memory, analytics, and multi-language support.</p><div class="tags sm"><span>Python</span><span>FastAPI</span><span>OpenAI</span></div></div>
+    <div class="card"><h3>📊 Analytics Dashboard</h3><p>Real-time data visualization with custom D3.js charts and automated CSV export.</p><div class="tags sm"><span>Vue.js</span><span>D3.js</span><span>Redis</span></div></div>
+  </div>
+</section>
+<section id="contact" class="section"><h2>📬 Let's Work Together</h2>
+  <form onsubmit="return sub(event,this)">
+    <div class="frow"><input placeholder="Your Name" required><input type="email" placeholder="Email" required></div>
+    <input placeholder="Subject / Role">
+    <textarea placeholder="Tell me about your project..." rows="5" required></textarea>
+    <button type="submit" class="btn">Send Message</button><p id="fmsg" class="fmsg"></p>
+  </form>
+</section>
+<footer class="footer"><p>&lt;Portfolio Website For A Full Stack Developer/&gt; · Built with ❤️ · © 2025</p></footer>
+
+<script src="app.js"></script>
+</body>
+</html>
