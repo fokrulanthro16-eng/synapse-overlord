@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
+use tracing::info;
 use axum::{
     body::Body,
     extract::{Path, State},
@@ -25,6 +26,16 @@ struct WebState {
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 pub async fn run_web_server() -> Result<()> {
+    // Structured logging: RUST_LOG=synapse_overlord=debug for verbose output.
+    // Falls back to info-level if the env var is absent or unparseable.
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                tracing_subscriber::EnvFilter::new("synapse_overlord=info")
+            }),
+        )
+        .try_init();
+
     let settings =
         crate::settings::load(std::path::Path::new(".")).unwrap_or_default();
 
@@ -69,10 +80,41 @@ pub async fn run_web_server() -> Result<()> {
         .route("/generated/{slug}/{file}", get(serve_project_file))
         .route("/api/projects/download/{slug}", get(download_project_zip))
         .route("/api/projects/enhance", post(api_enhance_project))
+        // ── Hermes Architect (Phase 2 — read-only analysis) ──────────────────
+        .route("/api/architect/analyze", post(crate::routes::hermes::analyze_handler))
+        // ── Hermes Architect (Phase 3 — safe patch proposal workflow) ─────────
+        .route("/api/architect/propose",             post(crate::routes::hermes::propose_handler))
+        .route("/api/architect/apply/{patch_id}",     post(crate::routes::hermes::apply_handler))
+        .route("/api/architect/reject/{patch_id}",   post(crate::routes::hermes::reject_handler))
+        .route("/api/architect/patches",             get(crate::routes::hermes::list_patches_handler))
+        .layer(axum::Extension(crate::tools::PatchStore::new()))
         .with_state(state);
 
-    println!("Synapse web dashboard  →  http://localhost:3000");
-    let listener = TcpListener::bind("0.0.0.0:3000").await?;
+    // Bind first — only print the URL once the socket is confirmed open.
+    // Use 127.0.0.1 so the port is localhost-only by default; change to
+    // 0.0.0.0 if LAN access is needed.
+    let listener = TcpListener::bind("127.0.0.1:3000").await.map_err(|e| {
+        anyhow::anyhow!(
+            "Cannot bind to 127.0.0.1:3000 — port may already be in use.\n\
+             Kill the process holding port 3000 and retry.\n\
+             Error: {}",
+            e
+        )
+    })?;
+
+    let addr = listener.local_addr()?;
+
+    // println! is unconditional — always visible regardless of RUST_LOG level.
+    println!();
+    println!("  ╔══════════════════════════════════════════╗");
+    println!("  ║      SYNAPSE-OVERLORD  ◈  web mode       ║");
+    println!("  ╠══════════════════════════════════════════╣");
+    println!("  ║  http://127.0.0.1:{}                   ║", addr.port());
+    println!("  ║  Press Ctrl-C to stop                    ║");
+    println!("  ╚══════════════════════════════════════════╝");
+    println!();
+
+    info!(%addr, "web server listening");
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -882,6 +924,22 @@ body{background:var(--bg);font-family:'Courier New',Consolas,monospace;display:f
 .spacer{flex:1}
 .sb-proj{font-size:11px;color:#555;padding:3px 0;border-bottom:1px solid #1a1a1a}
 .sb-proj span{color:#aaa}
+/* ── Hermes Agent ── */
+.hermes-badge{font-size:9px;letter-spacing:1.5px;color:#00d4ff;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.25);border-radius:20px;padding:3px 10px;margin:2px 0 6px;text-align:center;font-weight:bold}
+.hermes-pill{display:inline-flex;align-items:center;gap:4px;font-size:9px;padding:2px 9px;border-radius:10px;font-weight:bold;letter-spacing:.5px;white-space:nowrap}
+.hp-idle{background:#0f172a;color:#475569}.hp-scan{background:#1e3a5f;color:#93c5fd}.hp-read{background:#14312a;color:#6ee7b7}.hp-analyze{background:#3b1f0e;color:#fdba74}.hp-ready{background:#14291e;color:#86efac}
+.hermes-meta{display:flex;gap:5px;flex-wrap:wrap;padding:7px 14px;border-bottom:1px solid var(--border);background:#f8f9fa;flex-shrink:0}
+.hm-stat{font-size:10px;padding:2px 7px;background:#f1f5f9;border-radius:4px;color:#475569;white-space:nowrap}
+.hm-stat b{color:#1e293b}
+.hermes-tools-wrap{padding:6px 14px 5px;border-bottom:1px solid var(--border);flex-shrink:0}
+.htool-lbl{font-size:9px;font-weight:bold;letter-spacing:1.5px;color:#94a3b8;margin-bottom:4px}
+.tool-chip{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 7px;background:#f1f5f9;border-radius:12px;margin:2px;color:#475569;border:1px solid #e2e8f0}
+.tool-chip.ok{background:#dcfce7;border-color:#86efac;color:#15803d}
+.tool-chip.err{background:#fee2e2;border-color:#fca5a5;color:#991b1b}
+.sug-item{padding:5px 0;border-bottom:1px solid #f3f4f6;font-size:11px;color:#334155;display:flex;gap:7px;align-items:flex-start;line-height:1.5}
+.sug-icon{color:#6366f1;flex-shrink:0;font-size:13px;margin-top:1px}
+.hermes-phdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0;background:#fafaf7}
+.hermes-phdr-title{font-size:9px;font-weight:bold;letter-spacing:2px;color:#7b1fa2;text-transform:uppercase}
 /* Sidebar gen list */
 .sb-gen-item{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:11px;color:#94a3b8;transition:background .15s}
 .sb-gen-item:hover{background:#1e293b;color:#e2e8f0}
@@ -1012,6 +1070,7 @@ body{background:var(--bg);font-family:'Courier New',Consolas,monospace;display:f
 
 <div id="sb">
   <div class="brand">◈ SYNAPSE</div>
+  <div class="hermes-badge">⚡ BUILT WITH HERMES AGENT</div>
   <div class="profbar">◉ <b id="profName">Guest</b></div>
   <div id="sd" class="idle">● Idle</div>
 
@@ -1019,7 +1078,7 @@ body{background:var(--bg);font-family:'Courier New',Consolas,monospace;display:f
   <button class="cb bc" onclick="runCmd('map project')">◆ Map Project</button>
   <button class="cb bg" onclick="runCmd('test sandbox')">◆ Test Sandbox</button>
   <button class="cb bm" onclick="runCmd('ask models')">◆ Ask Models</button>
-  <button class="cb by" onclick="runCmd('run agent')">◆ Run Agent</button>
+  <button class="cb by" onclick="runHermes()">◆ Run Agent</button>
 
   <div class="slbl">VIEWS</div>
   <button class="cb bb"  onclick="setView('vDash')">◆ Dashboard</button>
@@ -1060,9 +1119,23 @@ body{background:var(--bg);font-family:'Courier New',Consolas,monospace;display:f
     </div>
   </div>
   <div id="panels">
-    <div class="panel pl">
-      <div class="phdr">AI CONSENSUS STREAM</div>
-      <div class="pbody" id="tLog"><div class="ti">Awaiting goal...</div></div>
+    <div class="panel pl" style="min-height:0;display:flex;flex-direction:column">
+      <div class="hermes-phdr">
+        <span class="hermes-phdr-title">HERMES ARCHITECT</span>
+        <span id="hermesStatus" class="hermes-pill hp-idle">● IDLE</span>
+      </div>
+      <div id="hermesMeta" class="hermes-meta" style="display:none"></div>
+      <div id="hermesToolsWrap" class="hermes-tools-wrap" style="display:none">
+        <div class="htool-lbl">TOOL CALLS</div>
+        <div id="hermesTools"></div>
+      </div>
+      <div class="pbody" id="tLog" style="flex:1;overflow-y:auto">
+        <div style="color:#94a3b8;font-size:11px;padding:4px 0;line-height:1.7">
+          Click <b style="color:#7b1fa2">◆ Run Agent</b> to launch Hermes Architect.<br>
+          The agent will scan your project, read source files,<br>
+          and return engineering analysis &amp; improvement suggestions.
+        </div>
+      </div>
     </div>
     <div class="panel pr">
       <div class="phdr">EXECUTION LOG</div>
@@ -1406,6 +1479,138 @@ function showMsg(id,text,isOk){
 function setBusy(on){
   document.querySelectorAll('.cb,#cRun,#cClr').forEach(b=>{b.disabled=on;});
   const sd=g('sd'); sd.textContent=on?'◌ Running':'● Idle'; sd.className=on?'running':'idle';
+}
+
+// ── Hermes Architect ───────────────────────────────────────────────────────────
+function setHermesStatus(state,label){
+  const el=g('hermesStatus'); if(!el)return;
+  const cls={idle:'hp-idle',scan:'hp-scan',read:'hp-read',analyze:'hp-analyze',ready:'hp-ready'}[state]||'hp-idle';
+  const icon={idle:'●',scan:'◌',read:'◌',analyze:'◌',ready:'✓'}[state]||'●';
+  el.className='hermes-pill '+cls;
+  el.textContent=icon+' '+(label||state.toUpperCase());
+}
+
+async function runHermes(){
+  const tlog=g('tLog'), meta=g('hermesMeta'), tw=g('hermesToolsWrap'), tools=g('hermesTools');
+  // Reset panel
+  if(tlog)tlog.innerHTML='';
+  if(meta)meta.style.display='none';
+  if(tw)tw.style.display='none';
+
+  setBusy(true);
+  setHermesStatus('scan','SCANNING PROJECT');
+  if(tlog){
+    const d=document.createElement('div');
+    d.style.cssText='color:#60a5fa;font-size:11px;padding:4px 0';
+    d.textContent='◌ Scanning project files…';
+    tlog.appendChild(d);
+  }
+  addTo('eLog','> [Hermes] Starting architect analysis…','lc');
+
+  try{
+    setHermesStatus('read','READING FILES');
+    const r=await fetch('/api/architect/analyze',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        goal:'You are the Hermes Architect analyzing a Rust/Axum project called Synapse-Overlord — a local-first AI project builder. Use your tools step by step: 1) list_directory on src/ to discover all modules, 2) file_read src/main.rs to understand the entry point and routing, 3) file_read 2-3 key module files (e.g. src/routes/hermes.rs, src/web/mod.rs, src/builder/mod.rs or similar), 4) file_search for important patterns. Then produce a structured engineering report with: a 2-sentence project summary, a list of key modules and their roles, and exactly 5 concrete improvement suggestions each as a bullet line starting with "- ".',
+        max_tool_calls:7
+      })
+    }).then(r=>r.json());
+
+    setHermesStatus('analyze','ANALYZING');
+    await new Promise(res=>setTimeout(res,200));
+
+    if(tlog)tlog.innerHTML='';
+
+    if(r.success||r.analysis){
+      setHermesStatus('ready','READY');
+
+      // ── Meta bar ────────────────────────────────────────────────────────────
+      if(meta){
+        meta.innerHTML=
+          '<span class="hm-stat">📁 <b>'+(r.files_analyzed||r.files_mapped||0)+'</b> files</span>'+
+          '<span class="hm-stat">🔧 <b>'+((r.tool_calls||[]).length)+'</b> tool calls</span>'+
+          '<span class="hm-stat">⚡ <b>'+(r.timing_ms||r.duration_ms||0)+'ms</b></span>'+
+          '<span class="hm-stat">🤖 <b>'+(r.backend||'?')+'</b></span>';
+        meta.style.display='flex';
+      }
+
+      // ── Tool call chips ──────────────────────────────────────────────────────
+      const tcArr=r.tool_calls||[];
+      if(tw&&tools&&tcArr.length){
+        tools.innerHTML=tcArr.map(tc=>'<span class="tool-chip '+(tc.success?'ok':'err')+'">'+(tc.success?'✓':'✗')+' '+tc.name+'</span>').join('');
+        tw.style.display='block';
+      }
+
+      // ── Execution log ────────────────────────────────────────────────────────
+      addTo('eLog','[Hermes] '+(r.files_analyzed||r.files_mapped||0)+' files · '+tcArr.length+' tool calls · '+(r.timing_ms||r.duration_ms||0)+'ms · '+(r.backend||'?')+'/'+(r.model||'?'),'lo');
+      tcArr.forEach(tc=>{
+        const p=(tc.result_preview||'').slice(0,80).replace(/\n/g,' ');
+        addTo('eLog','  ['+(tc.success?'✓':'✗')+'] '+tc.name+(p?' → '+p:''),tc.success?'ln':'lw');
+      });
+
+      // ── Summary + Suggestions (top of panel) ────────────────────────────────
+      const sugs=r.suggestions||[];
+      if(sugs.length){
+        const hdr=document.createElement('div');
+        hdr.style.cssText='font-size:9px;font-weight:bold;letter-spacing:1.5px;color:#6366f1;margin:4px 0;text-transform:uppercase';
+        hdr.textContent='◆ SUGGESTIONS';
+        if(tlog)tlog.appendChild(hdr);
+        sugs.forEach(s=>{
+          const d=document.createElement('div');
+          d.className='sug-item';
+          d.innerHTML='<span class="sug-icon">›</span><span>'+s+'</span>';
+          if(tlog)tlog.appendChild(d);
+        });
+      }
+
+      // ── Full analysis text ───────────────────────────────────────────────────
+      const analysis=r.analysis||'';
+      if(analysis){
+        const sep=document.createElement('div');
+        sep.style.cssText='font-size:9px;font-weight:bold;letter-spacing:1.5px;color:#64748b;margin:10px 0 4px;text-transform:uppercase';
+        sep.textContent='◆ FULL ANALYSIS';
+        if(tlog)tlog.appendChild(sep);
+        analysis.split('\n').forEach(line=>{
+          const t=line.trim(); if(!t)return;
+          const d=document.createElement('div');
+          if(t.startsWith('-')||t.startsWith('•')||t.startsWith('*')){
+            d.className='sug-item';
+            d.innerHTML='<span class="sug-icon">›</span><span>'+t.replace(/^[-•*]\s*/,'')+'</span>';
+          }else{
+            d.style.cssText='font-size:11px;color:#475569;padding:2px 0;line-height:1.6';
+            d.textContent=t;
+          }
+          if(tlog)tlog.appendChild(d);
+        });
+      }
+
+      if(!sugs.length&&!analysis){
+        addTo('tLog','Analysis complete. No output returned — check GROQ_API_KEY in .env','ln');
+      }
+
+    }else{
+      setHermesStatus('idle','ERROR');
+      addTo('eLog','[Hermes ERROR] '+(r.error||'Analysis failed'),'le');
+      if(tlog){
+        const d=document.createElement('div');
+        d.style.cssText='color:#c62828;font-size:11px;padding:4px 0';
+        d.textContent='❌ '+(r.error||'Analysis failed — check GROQ_API_KEY in .env');
+        tlog.appendChild(d);
+      }
+    }
+  }catch(e){
+    setHermesStatus('idle','ERROR');
+    addTo('eLog','[Hermes ERROR] '+e,'le');
+    if(tlog){
+      const d=document.createElement('div');
+      d.style.cssText='color:#c62828;font-size:11px;padding:4px 0';
+      d.textContent='❌ Connection error: '+e;
+      tlog.appendChild(d);
+    }
+  }
+  setBusy(false);
 }
 
 // ── Dashboard commands ─────────────────────────────────────────────────────────
