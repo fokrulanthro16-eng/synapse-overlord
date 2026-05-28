@@ -142,10 +142,17 @@ pub fn parse_tool_calls(response: &str) -> Vec<ToolCallRequest> {
 // ── Tool-result message builder ───────────────────────────────────────────────
 
 /// Wrap a tool result in the Hermes `<tool_response>` chatml format and
-/// return it as a `Tool`-role message ready to append to the conversation.
+/// return it as a `User`-role message ready to append to the conversation.
+///
+/// We use `User` (not `Tool`) because the agent loop drives tool calls via
+/// text-based `<tool_call>` tags — not the OpenAI native `tool_calls` API.
+/// Groq and other OpenAI-compatible APIs require a matching `tool_call_id`
+/// on every `role: "tool"` message; since we never emit official tool_calls
+/// objects there is no ID to attach, so the call would be rejected with 400.
+/// Embedding the result as a user turn is semantically equivalent here.
 pub fn build_tool_result_message(tool_name: &str, result: &str) -> LlmMessage {
     LlmMessage {
-        role: LlmRole::Tool,
+        role: LlmRole::User,
         content: format!(
             "<tool_response>\n\
 <name>{tool_name}</name>\n\
@@ -213,9 +220,9 @@ Awaiting result."#;
     }
 
     #[test]
-    fn tool_result_message_has_tool_role() {
+    fn tool_result_message_has_user_role() {
         let msg = build_tool_result_message("file_read", "fn main() {}");
-        assert_eq!(msg.role, LlmRole::Tool);
+        assert_eq!(msg.role, LlmRole::User);
         assert!(msg.content.contains("<name>file_read</name>"));
         assert!(msg.content.contains("fn main()"));
     }

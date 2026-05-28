@@ -940,6 +940,8 @@ body{background:var(--bg);font-family:'Courier New',Consolas,monospace;display:f
 .sug-icon{color:#6366f1;flex-shrink:0;font-size:13px;margin-top:1px}
 .hermes-phdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0;background:#fafaf7}
 .hermes-phdr-title{font-size:9px;font-weight:bold;letter-spacing:2px;color:#7b1fa2;text-transform:uppercase}
+/* ── Toast notification ── */
+#_toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fca5a5;font-size:12px;font-family:'Courier New',monospace;padding:9px 22px;border-radius:8px;border:1px solid #f87171;z-index:9999;max-width:92vw;text-align:center;box-shadow:0 4px 28px rgba(0,0,0,.55);opacity:0;transition:opacity .35s;pointer-events:none;white-space:nowrap}
 /* Sidebar gen list */
 .sb-gen-item{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:11px;color:#94a3b8;transition:background .15s}
 .sb-gen-item:hover{background:#1e293b;color:#e2e8f0}
@@ -1417,6 +1419,35 @@ body{background:var(--bg);font-family:'Courier New',Consolas,monospace;display:f
 const g = id => document.getElementById(id);
 const VIEWS = ['vDash','vSettings','vDb','vProjects','vGenerated','vPreview'];
 
+// ── Network helpers ────────────────────────────────────────────────────────────
+function showToast(msg){
+  let t=g('_toast');
+  if(!t){
+    t=document.createElement('div');t.id='_toast';
+    t.style.cssText='position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fca5a5;font-size:12px;font-family:\'Courier New\',monospace;padding:9px 22px;border-radius:8px;border:1px solid #f87171;z-index:9999;max-width:92vw;text-align:center;box-shadow:0 4px 28px rgba(0,0,0,.55);opacity:0;transition:opacity .35s;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent=msg; t.style.opacity='1';
+  clearTimeout(t._tid); t._tid=setTimeout(()=>{t.style.opacity='0';},4500);
+}
+async function safeFetch(url,opts={}){
+  try{
+    const res=await fetch(url,opts);
+    if(!res.ok){
+      const txt=await res.text().catch(()=>'');
+      throw new Error('HTTP '+res.status+(txt?': '+txt.slice(0,120):''));
+    }
+    return await res.json();
+  }catch(e){
+    const raw=String(e);
+    const msg=raw.includes('Failed to fetch')
+      ?'⚠ Cannot reach server — is Synapse-Overlord running on localhost:3000?'
+      :'⚠ Request failed: '+raw.replace('TypeError: ','').replace('Error: ','').slice(0,100);
+    showToast(msg);
+    return null;
+  }
+}
+
 // ── View switching ─────────────────────────────────────────────────────────────
 async function setView(id) {
   VIEWS.forEach(v => {
@@ -1618,41 +1649,41 @@ async function runCmd(cmd){ g('cInput').value=cmd; await submit(); }
 async function submit(){
   const inp=g('cInput'), cmd=inp.value.trim(); if(!cmd)return;
   inp.value=''; addTo('eLog','> '+cmd,'lc'); setBusy(true);
-  try{
-    const res=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:cmd})});
-    const d=await res.json();
+  const d=await safeFetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:cmd})});
+  if(d){
     (d.logs||[]).forEach(l=>addTo('eLog',l,logCls(l)));
     (d.thoughts||[]).forEach(t=>addTo('tLog',t,'ti'));
     if(cmd.toLowerCase().startsWith('build project'))setView('vGenerated');
-  }catch(e){addTo('eLog','[ERROR] '+e,'le');}
+  }else{
+    addTo('eLog','[ERROR] Server unreachable — run: cargo run -- web','le');
+  }
   setBusy(false);
 }
 g('cInput').addEventListener('keydown',e=>{ if(e.key==='Enter')submit(); });
 
 // ── Settings ───────────────────────────────────────────────────────────────────
 async function loadSettings(){
-  try{
-    const s=await fetch('/api/settings').then(r=>r.json());
-    g('sUsername').value=s.profile_username||'';
-    g('sDisplayName').value=s.profile_display_name||'';
-    g('sAiMode').value=s.ai_mode||'cloud';
-    g('sLogic').value=s.logic_model||'';
-    g('sAudit').value=s.audit_model||'';
-    g('sOptimize').value=s.optimize_model||'';
-    g('sIde').value=s.ide_connector||'none';
-    g('sIdePath').value=s.ide_workspace_path||'';
-    g('sSafetyBlock').checked=s.safety_block_destructive!==false;
-    g('sSafetyApproval').checked=s.safety_needs_approval!==false;
-    if(s.db_sqlite_path) g('dbPath').value=s.db_sqlite_path;
-    const ks=g('keyStatus');
-    if(s.api_key_set){ks.textContent='● Set';ks.style.color='#2e7d32';}
-    else{ks.textContent='○ Not Set';ks.style.color='#e65100';}
-  }catch(e){console.error(e);}
+  const s=await safeFetch('/api/settings');
+  if(!s){showToast('⚠ Could not load settings');return;}
+  g('sUsername').value=s.profile_username||'';
+  g('sDisplayName').value=s.profile_display_name||'';
+  g('sAiMode').value=s.ai_mode||'cloud';
+  g('sLogic').value=s.logic_model||'';
+  g('sAudit').value=s.audit_model||'';
+  g('sOptimize').value=s.optimize_model||'';
+  g('sIde').value=s.ide_connector||'none';
+  g('sIdePath').value=s.ide_workspace_path||'';
+  g('sSafetyBlock').checked=s.safety_block_destructive!==false;
+  g('sSafetyApproval').checked=s.safety_needs_approval!==false;
+  if(s.db_sqlite_path) g('dbPath').value=s.db_sqlite_path;
+  const ks=g('keyStatus');
+  if(s.api_key_set){ks.textContent='● Set';ks.style.color='#2e7d32';}
+  else{ks.textContent='○ Not Set';ks.style.color='#e65100';}
 }
 
 async function saveProfile(){
-  const r=await fetch('/api/profile/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:g('sUsername').value,display_name:g('sDisplayName').value})}).then(r=>r.json());
-  showMsg('profileMsg',r.saved?'✓ Saved':'✗ '+(r.error||'Error'),r.saved);
+  const r=await safeFetch('/api/profile/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:g('sUsername').value,display_name:g('sDisplayName').value})});
+  if(r)showMsg('profileMsg',r.saved?'✓ Saved':'✗ '+(r.error||'Error'),r.saved);
 }
 
 async function saveSettings(){
@@ -1666,26 +1697,26 @@ async function saveSettings(){
     api_key_set:false, db_sqlite_path:g('dbPath').value||'',
     projects:[], db_connections:[], active_project:'', active_db_id:'',
   };
-  const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
-  showMsg('settingsMsg',r.saved?'✓ Saved':'✗ '+(r.error||'Error'),r.saved);
+  const r=await safeFetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(r)showMsg('settingsMsg',r.saved?'✓ Saved':'✗ '+(r.error||'Error'),r.saved);
 }
 
 async function saveApiKeys(){
   const body={groq_api_key:g('sApiKey').value,logic_model:g('eLogic').value||null,audit_model:g('eAudit').value||null,optimize_model:g('eOptimize').value||null};
   g('sApiKey').value='';
-  const r=await fetch('/api/settings/api-keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
-  showMsg('apiKeyMsg',r.saved?'✓ Saved to .env':'✗ Save failed',r.saved);
-  if(r.saved)loadSettings();
+  const r=await safeFetch('/api/settings/api-keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(r){showMsg('apiKeyMsg',r.saved?'✓ Saved to .env':'✗ Save failed',r.saved);if(r.saved)loadSettings();}
 }
 
 async function saveIde(){
-  const r=await fetch('/api/ide/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ide_connector:g('sIde').value,ide_workspace_path:g('sIdePath').value})}).then(r=>r.json());
-  showMsg('ideMsg',r.saved?'✓ Saved':'✗ '+(r.error||'Error'),r.saved);
+  const r=await safeFetch('/api/ide/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ide_connector:g('sIde').value,ide_workspace_path:g('sIdePath').value})});
+  if(r)showMsg('ideMsg',r.saved?'✓ Saved':'✗ '+(r.error||'Error'),r.saved);
 }
 
 // ── Projects ───────────────────────────────────────────────────────────────────
 async function loadProjects(){
-  const r=await fetch('/api/projects').then(r=>r.json());
+  const r=await safeFetch('/api/projects');
+  if(!r){g('activeProjDisplay').textContent='Error loading projects';g('activeProjDisplay').style.color='#c62828';return;}
   g('activeProjDisplay').textContent=r.active_project||'No project selected';
   g('activeProjDisplay').style.color=r.active_project?'#2e7d32':'#888';
   const list=g('projectsList'); list.innerHTML='';
@@ -1702,17 +1733,16 @@ async function loadProjects(){
 async function addProject(){
   const name=g('projName').value.trim(), path=g('projPath').value.trim();
   if(!name||!path){showMsg('projMsg','✗ Name and path required',false);return;}
-  const r=await fetch('/api/projects/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,path})}).then(r=>r.json());
-  showMsg('projMsg',r.saved?'✓ Project added':'✗ '+(r.error||'Error'),r.saved);
-  if(r.saved){g('projName').value='';g('projPath').value='';loadProjects();}
+  const r=await safeFetch('/api/projects/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,path})});
+  if(r){showMsg('projMsg',r.saved?'✓ Project added':'✗ '+(r.error||'Error'),r.saved);if(r.saved){g('projName').value='';g('projPath').value='';loadProjects();}}
 }
 async function switchProj(path){
-  await fetch('/api/projects/switch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})}).then(r=>r.json());
-  loadProjects();
+  const r=await safeFetch('/api/projects/switch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
+  if(r)loadProjects();
 }
 async function removeProj(path){
-  await fetch('/api/projects/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})}).then(r=>r.json());
-  loadProjects();
+  const r=await safeFetch('/api/projects/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
+  if(r)loadProjects();
 }
 
 // ── Connection manager ─────────────────────────────────────────────────────────
@@ -1723,19 +1753,18 @@ function onConnTypeChange(){
 }
 async function testConn(){
   const body={connector_type:g('connType').value,path:g('connPath').value||null,host:g('connHost').value||null};
-  const r=await fetch('/api/database/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
-  g('connTestMsg').textContent=r.status; g('connTestMsg').style.color=r.ok?'#2e7d32':'#c62828';
+  const r=await safeFetch('/api/database/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(r){g('connTestMsg').textContent=r.status;g('connTestMsg').style.color=r.ok?'#2e7d32':'#c62828';}
 }
 async function saveConn(){
   const body={name:g('connName').value,connector_type:g('connType').value,path:g('connPath').value||null,host:g('connHost').value||null,database:g('connDb').value||null,username:g('connUser').value||null};
   if(!body.name){g('connTestMsg').textContent='Connection name required';return;}
-  const r=await fetch('/api/database/connections/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
-  g('connTestMsg').textContent=r.saved?'✓ Connection saved':'✗ '+(r.error||'Error');
-  g('connTestMsg').style.color=r.saved?'#2e7d32':'#c62828';
-  if(r.saved)loadConnections();
+  const r=await safeFetch('/api/database/connections/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(r){g('connTestMsg').textContent=r.saved?'✓ Connection saved':'✗ '+(r.error||'Error');g('connTestMsg').style.color=r.saved?'#2e7d32':'#c62828';if(r.saved)loadConnections();}
 }
 async function loadConnections(){
-  const s=await fetch('/api/settings').then(r=>r.json());
+  const s=await safeFetch('/api/settings');
+  if(!s)return;
   const list=g('connList'); list.innerHTML='';
   (s.db_connections||[]).forEach(c=>{
     const row=document.createElement('div'); row.className='conn-row';
@@ -1745,20 +1774,20 @@ async function loadConnections(){
     list.appendChild(row);
   });
 }
-function useConn(id){
-  fetch('/api/settings').then(r=>r.json()).then(s=>{
-    const c=(s.db_connections||[]).find(x=>x.id===id); if(!c)return;
-    g('connType').value=c.connector_type; onConnTypeChange();
-    g('connName').value=c.name;
-    if(c.path){g('connPath').value=c.path; if(c.connector_type==='sqlite')g('dbPath').value=c.path;}
-    if(c.host)g('connHost').value=c.host;
-    if(c.database)g('connDb').value=c.database;
-    if(c.username)g('connUser').value=c.username;
-  });
+async function useConn(id){
+  const s=await safeFetch('/api/settings');
+  if(!s)return;
+  const c=(s.db_connections||[]).find(x=>x.id===id); if(!c)return;
+  g('connType').value=c.connector_type; onConnTypeChange();
+  g('connName').value=c.name;
+  if(c.path){g('connPath').value=c.path; if(c.connector_type==='sqlite')g('dbPath').value=c.path;}
+  if(c.host)g('connHost').value=c.host;
+  if(c.database)g('connDb').value=c.database;
+  if(c.username)g('connUser').value=c.username;
 }
 async function delConn(id){
-  await fetch('/api/database/connections/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}).then(r=>r.json());
-  loadConnections();
+  const r=await safeFetch('/api/database/connections/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+  if(r)loadConnections();
 }
 
 // ── SQLite explorer ────────────────────────────────────────────────────────────
@@ -1766,13 +1795,15 @@ function dbPath(){return g('dbPath').value.trim();}
 async function dbTest(){
   const path=dbPath(); if(!path){g('dbStatus').textContent='Enter a path first.';return;}
   g('dbStatus').textContent='Testing…'; g('dbStatus').style.color='#888';
-  const r=await fetch('/api/database/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})}).then(r=>r.json());
+  const r=await safeFetch('/api/database/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
+  if(!r){g('dbStatus').textContent='Connection failed';g('dbStatus').style.color='#c62828';return;}
   g('dbStatus').textContent=r.status; g('dbStatus').style.color=r.ok?'#2e7d32':'#c62828';
 }
 async function dbLoadTables(){
   const path=dbPath(); if(!path)return;
-  const r=await fetch('/api/database/sqlite/tables',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})}).then(r=>r.json());
+  const r=await safeFetch('/api/database/sqlite/tables',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
   const list=g('tableList'); list.innerHTML='';
+  if(!r){list.innerHTML='<div style="color:#aaa;font-size:11px">Request failed</div>';return;}
   if(r.ok&&r.tables&&r.tables.length){
     r.tables.forEach(t=>{
       const b=document.createElement('button'); b.className='tbl-btn'; b.textContent=t.name;
@@ -1782,7 +1813,8 @@ async function dbLoadTables(){
 }
 async function dbSchema(name){
   const path=dbPath();
-  const r=await fetch('/api/database/sqlite/schema',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path,table:name})}).then(r=>r.json());
+  const r=await safeFetch('/api/database/sqlite/schema',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path,table:name})});
+  if(!r)return;
   g('schemaTableName').textContent=name;
   const wrap=g('schemaWrap'); wrap.innerHTML='';
   if(r.ok&&r.columns){
@@ -1798,7 +1830,8 @@ async function dbQuery(){
   const path=dbPath(), sql=g('sqlQuery').value.trim();
   g('queryErr').textContent=''; g('rowCount').textContent=''; g('resultTable').innerHTML='';
   if(!path||!sql)return;
-  const r=await fetch('/api/database/sqlite/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path,sql})}).then(r=>r.json());
+  const r=await safeFetch('/api/database/sqlite/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path,sql})});
+  if(!r){g('queryErr').textContent='Request failed';return;}
   if(!r.ok){g('queryErr').textContent=r.error||'Query failed';return;}
   const tbl=g('resultTable');
   const thead=tbl.createTHead(), hrow=thead.insertRow();
